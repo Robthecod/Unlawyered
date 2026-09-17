@@ -1,0 +1,21 @@
+{
+  "name": "unlawyered",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Legal AI for people who don't speak legal. Starts with Indian law.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:server": "npm run dev -w @unlawyered/server",
+    "dev:web": "npm run dev -w @unlawyered/web",
+    "build": "npm run build -w @unlawyered/shared && npm run build -w @unlawyered/server && npm run build -w @unlawyered/web",
+    "typecheck": "npm run typecheck -w @unlawyered/shared && npm run typecheck -w @unlawyered/server && npm run typecheck -w @unlawyered/web",
+    "test": "npm test -w @unlawyered/server",
+    "start": "npm run start -w @unlawyered/server"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
