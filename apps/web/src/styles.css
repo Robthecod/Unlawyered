@@ -204,6 +204,40 @@ code {
   }
 }
 
+/* Draggable-shape affordances (see AnimatedBackground.tsx). The shapes stay
+   pointer-events: none — the component hit-tests globally and toggles
+   body/shape classes while a grab is possible. */
+
+.bg-shape {
+  transition: filter 0.15s ease;
+}
+
+/* Lift cue while a shape can be picked up. */
+.bg-shape.grab-ready {
+  filter: drop-shadow(3px 3px 0 rgba(23, 20, 13, 0.25));
+}
+
+/* Hold the drift still while the shape is being dragged. */
+.bg-shape.grabbing {
+  animation-play-state: paused;
+}
+
+/* Native cursor affordance. Only when the adaptive cursor overlay is off —
+   it hides the native cursor and draws its own arrow. Cursor inherits down
+   through the transparent content elements above the shape. */
+html:not(.adaptive-cursor-on) body.bg-grab-ready {
+  cursor: grab;
+}
+html:not(.adaptive-cursor-on) body.bg-dragging {
+  cursor: grabbing;
+}
+
+/* Never let a drag sweep-select text or images. */
+body.bg-dragging,
+body.bg-dragging * {
+  user-select: none;
+}
+
 /* ------------------------------------------------------------------ */
 /* Logo                                                                */
 /* ------------------------------------------------------------------ */

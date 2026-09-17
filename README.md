@@ -42,7 +42,7 @@ works out of the box.
 | Route | Purpose |
 | --- | --- |
 | `GET  /api/health` | Milestone-1 connectivity check |
-| `GET  /api/providers` | Available providers + which has a key configured |
+| `GET  /api/settings/providers` | Available providers + which has a key configured |
 | `POST /api/settings/provider` | Store provider choice |
 | `POST /api/settings/key` | Store an API key (encrypted at rest) |
 | `DELETE /api/settings/key` | Forget the stored key |
