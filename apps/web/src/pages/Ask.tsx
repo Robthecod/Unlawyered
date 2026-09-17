@@ -3,7 +3,7 @@
  */
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { askLegalQuestion, getProviders, ApiError } from "../api";
+import { askLegalQuestion, getProviders, warmBackend, ApiError } from "../api";
 import { ResultView } from "../components/ResultView";
 import type { AiResult } from "@unlawyered/shared";
 
@@ -12,6 +12,11 @@ export function Ask() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AiResult | null>(null);
+
+  // Start waking the backend while the user is still typing.
+  useEffect(() => {
+    warmBackend();
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();

@@ -1,8 +1,8 @@
 /**
  * Stress-test my contract — adversarial clause-by-clause analysis.
  */
-import { useState } from "react";
-import { ApiError, stressTestContract, type UploadedDoc } from "../api";
+import { useEffect, useState } from "react";
+import { ApiError, stressTestContract, warmBackend, type UploadedDoc } from "../api";
 import { DocumentUpload } from "../components/DocumentUpload";
 import { ResultView } from "../components/ResultView";
 import { ProviderHint } from "./Ask";
@@ -15,6 +15,11 @@ export function StressTest() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AiResult | null>(null);
+
+  // Start waking the backend while the user is still choosing a file.
+  useEffect(() => {
+    warmBackend();
+  }, []);
 
   async function submit() {
     if (!doc || busy) return;

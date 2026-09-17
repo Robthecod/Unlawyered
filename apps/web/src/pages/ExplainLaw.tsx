@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { explainLaw, ApiError } from "../api";
+import { useEffect, useState } from "react";
+import { explainLaw, warmBackend, ApiError } from "../api";
 import { ResultView } from "../components/ResultView";
 import { ProviderHint } from "./Ask";
 import type { AiResult } from "@unlawyered/shared";
@@ -10,6 +10,11 @@ export function ExplainLaw() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AiResult | null>(null);
+
+  // Start waking the backend while the user is still typing.
+  useEffect(() => {
+    warmBackend();
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
