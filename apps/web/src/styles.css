@@ -1280,9 +1280,11 @@ textarea {
    pauses the orbit (animation-play-state), so aiming is easy. */
 
 .orbit-stage {
-  --spin-speed: 36s;
+  /* TUNING KNOBS: --orbit-size (ring diameter), --spin-speed (lap time).
+     Card radius is 0.47 * size, matching the dashed ring at inset 3%. */
+  --spin-speed: 30s;
   --play: running;
-  --orbit-size: min(74vmin, 560px);
+  --orbit-size: min(80vmin, 620px);
   position: relative;
   width: var(--orbit-size);
   height: var(--orbit-size);
@@ -1323,7 +1325,7 @@ textarea {
 
 .orbit-hub {
   position: absolute;
-  inset: 28%;
+  inset: 30%;
   z-index: 2;
   display: flex;
   flex-direction: column;
@@ -1398,11 +1400,12 @@ textarea {
   }
 }
 
-/* Radius placement inside the (rotating) arm frame. */
+/* Radius placement inside the (rotating) arm frame. 0.47 * size puts the
+   card centre exactly on the dashed ring (which sits at inset 3%). */
 .orbit-pos {
   position: absolute;
   inset: 0;
-  transform: translateY(calc(var(--orbit-size) / -2 + 64px));
+  transform: translateY(calc(var(--orbit-size) * -0.47));
 }
 
 /* Counter-spin: cancels the arm's motion AND the static --angle, so the
@@ -1422,14 +1425,32 @@ textarea {
   }
 }
 
+/* Gentle bob: lives inside the upright layer (screen-vertical motion) and
+   outside the card (hover press stays clean). Phase-offset per card. */
+.orbit-bob {
+  display: block;
+  animation: orbit-bob 2.6s ease-in-out infinite;
+  animation-delay: calc(var(--bob-i, 0) * -0.52s);
+}
+
+@keyframes orbit-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-7px);
+  }
+}
+
 .orbit-card {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.25rem;
-  width: 158px;
-  margin: -56px 0 0 -79px; /* center the card on its ring point */
+  width: 168px;
+  margin: -58px 0 0 -84px; /* center the card on its ring point */
   background: #fff;
   border: var(--border-w) solid var(--ink);
   border-radius: var(--radius);
@@ -1509,7 +1530,8 @@ textarea {
 
 @media (prefers-reduced-motion: reduce) {
   .orbit-arm,
-  .orbit-upright {
+  .orbit-upright,
+  .orbit-bob {
     animation: none !important;
   }
 }
@@ -1551,6 +1573,10 @@ textarea {
   .orbit-upright {
     animation: none;
     transform: none;
+  }
+
+  .orbit-bob {
+    animation: none;
   }
 
   .orbit-card {

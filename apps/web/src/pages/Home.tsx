@@ -173,9 +173,10 @@ export function Home() {
               <div className="orbit-arm">
                 <div className="orbit-pos">
                   <div className="orbit-upright">
-                    <Link
-                      to={t.to}
-                      className={`orbit-card ${t.accent}`}
+                    <div className="orbit-bob" style={{ "--bob-i": i } as CSSProperties}>
+                      <Link
+                        to={t.to}
+                        className={`orbit-card ${t.accent}`}
                       onMouseEnter={(e) => {
                         const stage = e.currentTarget.closest<HTMLElement>(".orbit-stage");
                         if (stage) stage.style.setProperty("--play", "paused");
@@ -185,12 +186,13 @@ export function Home() {
                         if (stage) stage.style.setProperty("--play", "running");
                       }}
                     >
-                      <span className="tool-num">{t.num}</span>
-                      <span className="icon" aria-hidden="true">
-                        {t.icon}
-                      </span>
-                      <strong className="orbit-title">{t.title}</strong>
-                    </Link>
+                        <span className="tool-num">{t.num}</span>
+                        <span className="icon" aria-hidden="true">
+                          {t.icon}
+                        </span>
+                        <strong className="orbit-title">{t.title}</strong>
+                      </Link>
+                    </div>
                   </div>
                 </div>
               </div>
