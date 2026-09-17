@@ -13,12 +13,12 @@
   NODE_VERSION = "20"
 
 # ── API proxy ────────────────────────────────────────────────────────────
-# Replace the placeholder with the real URL of the hosted Express server.
-# status = 200 (with force) means "proxy", not a redirect: the browser sees
-# same-origin responses and no CORS config is needed.
+# The Express API runs on Render (https://unlawyered.onrender.com, from
+# render.yaml). status = 200 (with force) means "proxy", not a redirect:
+# the browser sees same-origin responses and no CORS config is needed.
 [[redirects]]
   from = "/api/*"
-  to = "https://REPLACE-WITH-API-SERVER.example.com/api/:splat"
+  to = "https://unlawyered.onrender.com/api/:splat"
   status = 200
   force = true
 
