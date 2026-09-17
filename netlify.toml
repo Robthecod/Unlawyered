@@ -1,0 +1,31 @@
+# Netlify config for the UNLAWYERED web client.
+#
+# The build only compiles apps/web (the Vite + React client); the Express API
+# runs separately (Railway / Render / any Node host) and API calls are proxied
+# to it below, so the browser always talks to its own origin.
+
+[build]
+  command = "npm run build -w @unlawyered/web"
+  publish = "apps/web/dist"
+
+[build.environment]
+  # Matches the "engines" requirement in package.json.
+  NODE_VERSION = "20"
+
+# ── API proxy ────────────────────────────────────────────────────────────
+# Replace the placeholder with the real URL of the hosted Express server.
+# status = 200 (with force) means "proxy", not a redirect: the browser sees
+# same-origin responses and no CORS config is needed.
+[[redirects]]
+  from = "/api/*"
+  to = "https://REPLACE-WITH-API-SERVER.example.com/api/:splat"
+  status = 200
+  force = true
+
+# ── SPA fallback ─────────────────────────────────────────────────────────
+# Client-side routes (/ask, /settings, …) get index.html. Netlify serves
+# existing static files before redirects apply, so /assets/* is unaffected.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
