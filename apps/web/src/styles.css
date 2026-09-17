@@ -1271,27 +1271,171 @@ textarea {
   margin: 0;
 }
 
-.tool-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 1.4rem;
+/* ------------------------------------------------------------------ */
+/* Home: orbital tools carousel                                        */
+/* ------------------------------------------------------------------ */
+/* The five tools revolve clockwise around the hub catchphrase. Each card
+   is upright at all times: rotations cancel exactly across the nested
+   layers (θ static + spin animated + counter-spin animated = 0). Hover
+   pauses the orbit (animation-play-state), so aiming is easy. */
+
+.orbit-stage {
+  --spin-speed: 36s;
+  --play: running;
+  --orbit-size: min(74vmin, 560px);
+  position: relative;
+  width: var(--orbit-size);
+  height: var(--orbit-size);
+  margin: 2.4rem auto 1rem;
 }
 
-/* Keep 2 tidy columns on wide screens so rows never half-fill. */
-@media (min-width: 1060px) {
-  .tool-grid {
-    grid-template-columns: repeat(2, 1fr);
+/* Aiming anywhere over the field pauses the ride. */
+.orbit-stage:hover {
+  --play: paused;
+}
+
+.orbit-ring {
+  position: absolute;
+  inset: 3%;
+  border: 3px dashed rgba(23, 20, 13, 0.28);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.orbit-ring .orbit-dot {
+  position: absolute;
+  top: -6px;
+  left: 10%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--coral);
+  border: 2px solid var(--ink);
+}
+
+.orbit-ring .orbit-dot.two {
+  top: auto;
+  bottom: -6px;
+  left: auto;
+  right: 10%;
+  background: var(--violet);
+}
+
+.orbit-hub {
+  position: absolute;
+  inset: 28%;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  text-align: center;
+  background: var(--mustard);
+  border: var(--border-w) solid var(--ink);
+  border-radius: 50%;
+  box-shadow: var(--shadow-lg);
+  padding: 1rem;
+}
+
+.orbit-hub strong {
+  font-family: var(--font-display);
+  font-size: clamp(1.25rem, 3vw, 1.8rem);
+  line-height: 1.1;
+}
+
+.orbit-hub em {
+  font-style: normal;
+  display: inline-block;
+  background: var(--ink);
+  color: var(--cream);
+  border-radius: 6px;
+  padding: 0 0.3rem;
+  transform: rotate(-2deg);
+}
+
+.orbit-kicker {
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  background: var(--teal);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  padding: 0.08rem 0.55rem;
+}
+
+.orbit-sub {
+  font-size: 0.78rem;
+  font-weight: 700;
+  opacity: 0.75;
+}
+
+/* Static per-card frame: rotated by --angle around the stage centre. */
+.tool-orbit {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  transform: rotate(var(--angle));
+}
+
+/* Animated arm: revolves the card clockwise around the stage centre. */
+.orbit-arm {
+  position: absolute;
+  inset: 0;
+  animation: orbit-ccw var(--spin-speed) linear infinite;
+  animation-play-state: var(--play);
+}
+
+@keyframes orbit-ccw {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(-360deg);
   }
 }
 
-.tool-card {
-  position: relative;
+/* Radius placement inside the (rotating) arm frame. */
+.orbit-pos {
+  position: absolute;
+  inset: 0;
+  transform: translateY(calc(var(--orbit-size) / -2 + 64px));
+}
+
+/* Counter-spin: cancels the arm's motion AND the static --angle, so the
+   card stays perfectly upright through the whole orbit. */
+.orbit-upright {
   display: block;
+  animation: orbit-cw var(--spin-speed) linear infinite;
+  animation-play-state: var(--play);
+}
+
+@keyframes orbit-cw {
+  from {
+    transform: rotate(calc(-1 * var(--angle)));
+  }
+  to {
+    transform: rotate(calc(-1 * var(--angle) + 360deg));
+  }
+}
+
+.orbit-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  width: 158px;
+  margin: -56px 0 0 -79px; /* center the card on its ring point */
   background: #fff;
   border: var(--border-w) solid var(--ink);
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
-  padding: 1.35rem 1.4rem 1.45rem;
+  padding: 0.8rem 0.7rem 0.9rem;
+  text-align: center;
   text-decoration: none;
   color: var(--ink);
   transition:
@@ -1299,145 +1443,125 @@ textarea {
     box-shadow 0.1s ease;
 }
 
-.tool-card:hover {
-  transform: translate(3px, 3px);
-  box-shadow: 5px 5px 0 var(--ink);
+.orbit-card:hover {
+  transform: translate(2px, 2px);
+  box-shadow: var(--shadow-sm);
 }
 
-.tool-card:active {
-  transform: translate(8px, 8px);
+.orbit-card:active {
+  transform: translate(6px, 6px);
   box-shadow: 0 0 0 var(--ink);
 }
 
-.tool-card .icon {
+.orbit-card .icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 54px;
-  height: 54px;
+  width: 44px;
+  height: 44px;
   border: var(--border-w) solid var(--ink);
   border-radius: 12px;
-  box-shadow: 4px 4px 0 var(--ink);
-  font-size: 1.55rem;
+  box-shadow: 3px 3px 0 var(--ink);
+  font-size: 1.3rem;
 }
 
-.tool-card h3 {
-  margin: 0.85rem 0 0.35rem;
-  font-size: 1.22rem;
+.orbit-card .orbit-title {
+  font-family: var(--font-display);
+  font-size: 0.86rem;
+  line-height: 1.2;
 }
 
-.tool-card p {
-  margin: 0;
-  color: var(--text-dim);
-  font-size: 0.92rem;
-}
-
-.tool-card .tool-cta {
-  display: inline-block;
-  margin-top: 0.9rem;
-  font-weight: 800;
-  font-size: 0.9rem;
-  border-bottom: 3px solid transparent;
-}
-
-.tool-card:hover .tool-cta {
-  border-bottom-color: var(--ink);
-}
-
-.tool-card .tool-num {
+.orbit-card .tool-num {
   position: absolute;
-  top: -14px;
-  right: 14px;
+  top: -12px;
+  right: -8px;
   background: var(--ink);
   color: var(--cream);
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 0.78rem;
+  font-size: 0.68rem;
   border-radius: 999px;
-  padding: 0.12rem 0.6rem;
+  padding: 0.1rem 0.5rem;
   border: 2px solid var(--ink);
 }
 
-/* Accent colorways applied inline via --tool-accent */
-.tool-card.accent-coral .icon {
+/* Accent colorways */
+.tool-orbit.accent-coral .icon {
   background: var(--coral);
 }
 
-.tool-card.accent-teal .icon {
+.tool-orbit.accent-teal .icon {
   background: var(--teal);
 }
 
-.tool-card.accent-mustard .icon {
+.tool-orbit.accent-mustard .icon {
   background: var(--mustard);
 }
 
-.tool-card.accent-violet .icon {
+.tool-orbit.accent-violet .icon {
   background: var(--violet);
-}
-
-.tool-card.accent-violet .icon {
   color: #fff;
 }
 
-.tool-card.accent-sky .icon {
+.tool-orbit.accent-sky .icon {
   background: var(--sky);
 }
 
-/* Featured Ask panel — spans the full width under the grid so the tools
-   section is always a complete rectangle (no empty corner). */
-.tool-featured {
-  display: block;
-  margin-top: 1.4rem;
-  padding: 1.8rem 2rem;
+@media (prefers-reduced-motion: reduce) {
+  .orbit-arm,
+  .orbit-upright {
+    animation: none !important;
+  }
 }
 
-.tool-featured .icon {
-  width: 62px;
-  height: 62px;
-  font-size: 1.8rem;
-  background: var(--teal);
-  transition: background 0.15s ease;
-}
+/* Mobile: the orbit becomes a clean vertical stack. */
+@media (max-width: 760px) {
+  .orbit-stage {
+    width: auto;
+    height: auto;
+    margin: 1.6rem 0 0;
+  }
 
-.feat-start {
-  position: absolute;
-  top: -14px;
-  right: 18px;
-  background: var(--coral);
-  color: var(--ink);
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: 0.78rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  border: 2px solid var(--ink);
-  border-radius: 999px;
-  padding: 0.16rem 0.8rem;
-  box-shadow: 3px 3px 0 var(--ink);
-  transform: rotate(2deg);
-}
+  .orbit-ring {
+    display: none;
+  }
 
-.feat-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: 0.9rem;
-}
+  .orbit-hub {
+    position: static;
+    inset: auto;
+    border-radius: 20px;
+    max-width: 340px;
+    margin: 0 auto 1.3rem;
+  }
 
-.feat-chip {
-  display: inline-block;
-  background: var(--cream);
-  border: 2px solid var(--ink);
-  border-radius: 999px;
-  padding: 0.18rem 0.75rem;
-  font-size: 0.82rem;
-  font-weight: 600;
-  transform: rotate(-0.5deg);
-}
+  .tool-orbit {
+    position: static;
+    width: auto;
+    height: auto;
+    transform: none;
+  }
 
-.feat-chip:nth-child(2n) {
-  transform: rotate(0.6deg);
-  background: #fff;
+  .orbit-arm,
+  .orbit-pos {
+    position: static;
+    animation: none;
+    transform: none;
+  }
+
+  .orbit-upright {
+    animation: none;
+    transform: none;
+  }
+
+  .orbit-card {
+    width: 100%;
+    margin: 0 0 1rem;
+    flex-direction: row;
+    justify-content: flex-start;
+    text-align: left;
+    gap: 0.7rem;
+    padding: 0.85rem 1rem;
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -1698,21 +1822,9 @@ textarea {
 
   .card,
   .result,
-  .tool-card,
+  .orbit-card,
   .hiw-step {
     box-shadow: var(--shadow-sm);
-  }
-
-  .tool-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .tool-featured {
-    padding: 1.5rem 1.4rem;
-  }
-
-  .feat-chip {
-    font-size: 0.76rem;
   }
 
   .mock-sticker {

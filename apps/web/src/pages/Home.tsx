@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { Link } from "react-router-dom";
 
 const TOOLS = [
@@ -48,15 +49,8 @@ const TOOLS = [
   },
 ];
 
-/** Mini sample questions shown as chips on the featured Ask panel. */
-const SAMPLE_QUESTIONS = [
-  "Can my landlord keep my deposit?",
-  "What is a legal notice?",
-  "Is an 11-month rent agreement valid?",
-];
-
-/** Rotating accent palette for the featured panel's icon on hover. */
-const FEATURED_ACCENTS = ["var(--coral)", "var(--teal)", "var(--sky)", "var(--violet)"];
+/** Angles (deg) placing the five tools evenly around the orbit, starting top. */
+const ORBIT_ANGLES = [-90, -18, 54, 126, 198];
 
 const STEPS = [
   {
@@ -77,11 +71,6 @@ const STEPS = [
 ];
 
 export function Home() {
-  // The featured Ask card lives outside the grid (see below); the grid keeps
-  // the other four tools so rows never half-fill.
-  const gridTools = TOOLS.filter((t) => t.to !== "/ask");
-  const featured = TOOLS.find((t) => t.to === "/ask")!;
-
   return (
     <div>
       {/* ------------------------------ Hero ------------------------------ */}
@@ -158,55 +147,56 @@ export function Home() {
             to the claims — legal information, never legal advice.
           </p>
         </div>
-        <div className="tool-grid">
-          {gridTools.map((t) => (
-            <Link key={t.to} to={t.to} className={`tool-card ${t.accent}`}>
-              <span className="tool-num">{t.num}</span>
-              <span className="icon" aria-hidden="true">
-                {t.icon}
-              </span>
-              <h3>{t.title}</h3>
-              <p>{t.desc}</p>
-              <span className="tool-cta">{t.cta}</span>
-            </Link>
+        <div className="orbit-stage">
+          <div className="orbit-ring" aria-hidden="true">
+            <span className="orbit-dot" />
+            <span className="orbit-dot two" />
+          </div>
+
+          {/* Center hub — the catchphrase everything revolves around. */}
+          <div className="orbit-hub">
+            <span className="orbit-kicker">5 tools</span>
+            <strong>
+              Pick your
+              <br />
+              <em>problem</em>
+            </strong>
+            <span className="orbit-sub">click one →</span>
+          </div>
+
+          {/* The five tools in orbit. Nesting: frame (static angle) → arm
+              (animated revolution) → radius placement → upright (animated
+              counter-spin) → card. Rotations cancel exactly, so cards stay
+              upright; hover pauses the ride for easy aiming. */}
+          {TOOLS.map((t, i) => (
+            <div key={t.to} className="tool-orbit" style={{ "--angle": `${ORBIT_ANGLES[i]}deg` } as CSSProperties}>
+              <div className="orbit-arm">
+                <div className="orbit-pos">
+                  <div className="orbit-upright">
+                    <Link
+                      to={t.to}
+                      className={`orbit-card ${t.accent}`}
+                      onMouseEnter={(e) => {
+                        const stage = e.currentTarget.closest<HTMLElement>(".orbit-stage");
+                        if (stage) stage.style.setProperty("--play", "paused");
+                      }}
+                      onMouseLeave={(e) => {
+                        const stage = e.currentTarget.closest<HTMLElement>(".orbit-stage");
+                        if (stage) stage.style.setProperty("--play", "running");
+                      }}
+                    >
+                      <span className="tool-num">{t.num}</span>
+                      <span className="icon" aria-hidden="true">
+                        {t.icon}
+                      </span>
+                      <strong className="orbit-title">{t.title}</strong>
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </div>
           ))}
         </div>
-
-        {/* Featured Ask panel — keeps the section a full rectangle, no empty corner. */}
-        <Link
-          to={featured.to}
-          className="tool-card tool-featured"
-          onMouseMove={(e) => {
-            const el = e.currentTarget.querySelector<HTMLElement>(".icon");
-            if (el) {
-              const rect = e.currentTarget.getBoundingClientRect();
-              const idx = Math.floor(
-                ((e.clientX - rect.left) / Math.max(1, rect.width)) * FEATURED_ACCENTS.length,
-              );
-              el.style.background = FEATURED_ACCENTS[Math.min(idx, FEATURED_ACCENTS.length - 1)] ?? "";
-            }
-          }}
-          onMouseLeave={(e) => {
-            const el = e.currentTarget.querySelector<HTMLElement>(".icon");
-            if (el) el.style.background = "";
-          }}
-        >
-          <span className="tool-num">{featured.num}</span>
-          <span className="icon" aria-hidden="true">
-            {featured.icon}
-          </span>
-          <span className="feat-start">start here</span>
-          <h3>{featured.title}</h3>
-          <p>{featured.desc}</p>
-          <div className="feat-chips">
-            {SAMPLE_QUESTIONS.map((q) => (
-              <span key={q} className="feat-chip">
-                {q}
-              </span>
-            ))}
-          </div>
-          <span className="tool-cta">{featured.cta}</span>
-        </Link>
       </section>
 
       {/* ---------------------------- How it works ---------------------------- */}
