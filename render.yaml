@@ -1,0 +1,28 @@
+# Render Blueprint for the UNLAWYERED Express API.
+#
+# Deploy: Render dashboard → New + → Blueprint → pick this repo.
+# Render reads this file and creates the service with the right build,
+# start command and env vars — no manual configuration needed.
+#
+# After the first deploy, copy the service URL (https://unlawyered-api.onrender.com)
+# into netlify.toml's /api/* redirect so the frontend proxies to it.
+
+services:
+  - type: web
+    name: unlawyered-api
+    runtime: node
+    plan: free
+    # --include=dev keeps tsx (a devDependency) installed in production.
+    buildCommand: npm install --include=dev
+    startCommand: npm run start -w @unlawyered/server
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      # Bind to all interfaces — Render cannot reach 127.0.0.1.
+      - key: HOST
+        value: 0.0.0.0
+      # Auto-generated once by Render, then stable across deploys, so stored
+      # API keys stay decryptable across restarts.
+      - key: UNLAWYERED_SECRET
+        generateValue: true
