@@ -85,14 +85,14 @@ export function Home() {
           </span>
           <h1>
             Law is{" "}
-            <span className="hl mustard word-pop" style={{ "--pop-i": 1 } as CSSProperties}>
-              complicated
+            <span className="word-pop" style={{ "--pop-i": 1 } as CSSProperties}>
+              <span className="hl mustard hl-sway">complicated</span>
             </span>
             .
             <br />
             Understanding it{" "}
-            <span className="hl teal word-pop" style={{ "--pop-i": 2 } as CSSProperties}>
-              shouldn't
+            <span className="word-pop" style={{ "--pop-i": 2 } as CSSProperties}>
+              <span className="hl teal hl-sway hl-sway-alt">shouldn't</span>
             </span>{" "}
             be.
           </h1>

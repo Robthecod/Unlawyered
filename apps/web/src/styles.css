@@ -1175,6 +1175,36 @@ textarea {
   background: var(--teal);
 }
 
+/* Same perpetual life as the kicker chip: the highlighted headline words
+   sway gently forever. Separate element from the entrance wrapper so the
+   pop (once) and sway (forever) never fight over the transform. The two
+   words run at different speeds so they don't move in lockstep. */
+.hl-sway {
+  display: inline-block;
+  animation: hl-bob 3.4s ease-in-out infinite alternate;
+}
+
+.hl-sway-alt {
+  animation-duration: 4.1s;
+  animation-delay: -1.6s; /* negative delay desyncs it from "complicated" */
+}
+
+@keyframes hl-bob {
+  from {
+    transform: rotate(-1.1deg) translateY(-0.035em);
+  }
+  to {
+    transform: rotate(1.1deg) translateY(0.035em);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hl-sway,
+  .hl-sway-alt {
+    animation: none;
+  }
+}
+
 .hero-sub {
   font-size: 1.08rem;
   color: var(--text-dim);
