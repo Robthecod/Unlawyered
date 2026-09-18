@@ -1191,10 +1191,10 @@ textarea {
 
 @keyframes hl-bob {
   from {
-    transform: rotate(-1.1deg) translateY(-0.035em);
+    transform: rotate(-0.6deg) translateY(-0.02em);
   }
   to {
-    transform: rotate(1.1deg) translateY(0.035em);
+    transform: rotate(0.6deg) translateY(0.02em);
   }
 }
 
