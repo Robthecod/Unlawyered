@@ -33,6 +33,30 @@ const CACHE_TTL_MS = 10 * 60 * 1000;
  */
 const DEFAULT_MAX_OUTPUT_TOKENS = 8192;
 
+/**
+ * Gemini 2.5+ models "think" (hidden multi-pass reasoning) before answering
+ * by default. That adds several seconds of invisible latency per answer and
+ * burns the output budget before the mandatory SOURCES footer is written —
+ * a direct cause of the truncation bug this file already guards against.
+ * Plain-English legal explanation doesn't need deep reasoning, so turn it
+ * down wherever the model family allows:
+ *  - 2.5 Flash / Flash-Lite: thinkingBudget 0 disables thinking entirely.
+ *  - 3-series: thinking cannot be disabled; thinkingLevel "low" minimises it
+ *    (they reject the old thinkingBudget field, so never send both).
+ *  - 2.5 Pro / unknown ids: send nothing — invalid config would 400 every
+ *    request for that model.
+ */
+export function thinkingConfigFor(model: string): { thinkingConfig?: { thinkingBudget?: number; thinkingLevel?: string } } {
+  const m = model.toLowerCase();
+  if (/^gemini-3/.test(m)) {
+    return { thinkingConfig: { thinkingLevel: "low" } };
+  }
+  if (/^gemini-2\.5/.test(m) && !/pro/.test(m)) {
+    return { thinkingConfig: { thinkingBudget: 0 } };
+  }
+  return {};
+}
+
 /** Models that recently failed real requests; value = blocked-until timestamp. */
 const modelBlocklist = new Map<string, number>();
 const BLOCKLIST_TTL_MS = 2 * 60 * 1000;
@@ -220,6 +244,9 @@ async function generateOnce(
     generationConfig: {
       temperature: 0.2,
       maxOutputTokens: args.maxTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+      // Real generation only; the tiny testConnection / availability probes
+      // stay untouched so their 5-token semantics keep working everywhere.
+      ...thinkingConfigFor(model),
     },
   };
 
