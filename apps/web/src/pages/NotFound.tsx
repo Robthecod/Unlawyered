@@ -7,7 +7,7 @@ import { Logo } from "../components/Logo";
 export function NotFound() {
   return (
     <div className="notfound">
-      <Logo size={72} />
+      <Logo height={84} />
       <p className="nf-kicker">COURT ADJOURNED</p>
       <h1 className="nf-code">404</h1>
       <h2 className="nf-title">Objection sustained.</h2>

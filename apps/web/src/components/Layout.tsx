@@ -43,8 +43,7 @@ export function Layout() {
       <header className="site-header">
         <div className="site-header-inner">
           <Link to="/" className="brand">
-            <Logo size={32} />
-            <span className="brand-name">UNLAWYERED</span>
+            <Logo height={38} />
           </Link>
           <span className="tagline">Legal AI for people who don't speak legal</span>
           <nav className="nav" aria-label="Primary">

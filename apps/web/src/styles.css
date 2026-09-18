@@ -250,6 +250,11 @@ body.bg-dragging * {
 
 .brand .logo {
   flex: none;
+  display: block;
+  width: auto;
+  /* The colorful wordmark carries its own contrast; lift it slightly off
+     busy Memphis backdrops without dimming the colors. */
+  filter: drop-shadow(0 1px 0 rgba(23, 20, 13, 0.14));
 }
 
 .brand-name {
