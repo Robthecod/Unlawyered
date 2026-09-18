@@ -40,16 +40,28 @@ export async function runToolStream(
     res.write(`data: ${JSON.stringify(event)}\n\n`);
   };
 
-  // Comment ping keeps proxies from closing an idle stream during the (up to
-  // ~50 s) cold start before the first token arrives.
-  const ping = setInterval(() => res.write(": ping\n\n"), 15_000);
+  // Keep-alive pings keep proxies and Render's edge from closing an idle
+  // stream while the first token is still pending (endpoint resolution,
+  // provider queueing, and Gemini first-token latency can easily exceed 15s).
+  // Render's edge terminates idle upstream connections at ~15s, so the ping
+  // must land BEFORE that: first ping immediately (flushes response head
+  // through buffering proxies too), then every 5s for the stream's life.
+  res.write(": ping\n\n");
+  const ping = setInterval(() => res.write(": ping\n\n"), 5_000);
+  let sawTerminal = false;
   try {
     const providerId = pickProviderId();
-    await runAiToolStream(tool, providerId as ProviderId, userPayload, send);
+    await runAiToolStream(tool, providerId as ProviderId, userPayload, (event) => {
+      if (event.type === "error" || event.type === "done") sawTerminal = true;
+      send(event);
+    });
   } catch {
     // runAiToolStream already emitted an `error` event; the response ends here.
-  } finally {
-    clearInterval(ping);
-    res.end();
   }
+  // Belt and braces: if generation died without a terminal event (e.g. an
+  // exception between emissions), never end the stream bare — the client
+  // would otherwise report a vague "ended before it finished".
+  if (!sawTerminal) send({ type: "error", code: "incomplete-stream", message: "The answer generation ended unexpectedly. Please try again." });
+  clearInterval(ping);
+  res.end();
 }
