@@ -32,7 +32,17 @@ export function resolveProviderOrThrow(providerId: ProviderId) {
 /** The provider the app should use: the one stored in Settings, else mock. */
 export function pickProviderId(): ProviderId {
   try {
-    return getSelectedProvider() ?? "mock";
+    const stored = getSelectedProvider();
+    if (stored) return stored;
+    // Nothing stored (fresh deploy, ephemeral disk, first boot): fall back to
+    // the first env-seeded provider with a usable key. Env keys exist so the
+    // app works before anyone opens Settings — honoring them only when a real
+    // generation calls resolveApiKey would half-work (requests would succeed
+    // via mock while the UI claims a real provider is configured).
+    for (const id of ["gemini", "openai", "anthropic"] as const) {
+      if (resolveApiKey(id)?.key) return id;
+    }
+    return "mock";
   } catch {
     return "mock";
   }
