@@ -76,11 +76,25 @@ export function Home() {
       {/* ------------------------------ Hero ------------------------------ */}
       <section className="home-hero">
         <div>
-          <span className="hero-kicker">Legal AI, minus the jargon</span>
+          {/* Only these words pop in (staggered, one-time): the kicker chip
+              and the two highlighted headline words. Everything else on the
+              page is static. The chip is wrapped — its own -2deg tilt must
+              not be overridden by the animation's transform. */}
+          <span className="word-pop" style={{ "--pop-i": 0 } as CSSProperties}>
+            <span className="hero-kicker">Legal AI, minus the jargon</span>
+          </span>
           <h1>
-            Law is <span className="hl mustard">complicated</span>.
+            Law is{" "}
+            <span className="hl mustard word-pop" style={{ "--pop-i": 1 } as CSSProperties}>
+              complicated
+            </span>
+            .
             <br />
-            Understanding it <span className="hl teal">shouldn't</span> be.
+            Understanding it{" "}
+            <span className="hl teal word-pop" style={{ "--pop-i": 2 } as CSSProperties}>
+              shouldn't
+            </span>{" "}
+            be.
           </h1>
           <p className="hero-sub">
             UNLAWYERED turns complicated legal language, documents, and judgments into

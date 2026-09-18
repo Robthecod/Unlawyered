@@ -1108,6 +1108,38 @@ textarea {
   font-weight: 800;
 }
 
+/* One-time staggered entrance for the hero's specific words only: the kicker
+   chip and the two highlighted headline words. --pop-i sequences them; the
+   springy overshoot matches the Memphis look. */
+@keyframes hero-word-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(0.55em) scale(0.8) rotate(3deg);
+  }
+  62% {
+    opacity: 1;
+    transform: translateY(-0.1em) scale(1.07) rotate(-1deg);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1) rotate(0deg);
+  }
+}
+
+.word-pop {
+  display: inline-block;
+  opacity: 0;
+  animation: hero-word-pop 0.6s cubic-bezier(0.22, 1.2, 0.36, 1) forwards;
+  animation-delay: calc(var(--pop-i, 0) * 130ms + 150ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .word-pop {
+    animation: none;
+    opacity: 1;
+  }
+}
+
 .hl {
   padding: 0 0.14em;
   border-radius: 0.18em;
