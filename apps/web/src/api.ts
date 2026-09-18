@@ -179,10 +179,14 @@ export interface UploadedDoc extends UploadedDocument {
 export async function uploadDocument(file: File): Promise<UploadedDoc> {
   const form = new FormData();
   form.append("file", file);
-  return handleWithRetry<UploadedDoc>("/api/documents", {
-    method: "POST",
-    body: form,
-  });
+  // Server shape: { document: UploadedDocument, text: string } — unwrap it.
+  // (A bare cast here once shipped a nested object as if it were flat, and the
+  // first render of doc.characters threw, blanking the whole page.)
+  const res = await handleWithRetry<{ document: UploadedDocument; text: string }>(
+    "/api/documents",
+    { method: "POST", body: form },
+  );
+  return { ...res.document, text: res.text };
 }
 
 /* ------------------------------------------------------------------ */
