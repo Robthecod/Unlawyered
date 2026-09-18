@@ -426,7 +426,7 @@ async function streamGenerateOnce(
       onDelta(text);
     }
   };
-  const feed = createSseLineParser(handleData);
+  const { feed, flush } = createSseLineParser(handleData);
 
   try {
     for (;;) {
@@ -435,6 +435,7 @@ async function streamGenerateOnce(
       feed(decoder.decode(value, { stream: true }));
     }
     feed(decoder.decode()); // flush any final partial line
+    flush(); // emit a trailing frame not terminated by a newline
   } finally {
     reader.releaseLock();
   }

@@ -85,7 +85,7 @@ async function generateOnce(
 
 interface AnthropicStreamEvent {
   type?: string;
-  delta?: { type?: string; text?: string };
+  delta?: { type?: string; text?: string; stop_reason?: string };
   error?: { message?: string };
 }
 
@@ -129,6 +129,7 @@ async function streamGenerateOnce(
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let answer = "";
+  let truncated = false;
 
   const handleData = (data: string) => {
     if (!data) return;
@@ -141,12 +142,14 @@ async function streamGenerateOnce(
     if (ev.type === "error") {
       throw new ProviderError(502, "upstream", `Anthropic stream failed: ${ev.error?.message ?? "unknown error"}`);
     }
+    // message_delta carries the terminal stop_reason; "max_tokens" = cut off.
+    if (ev.type === "message_delta" && ev.delta?.stop_reason === "max_tokens") truncated = true;
     if (ev.type === "content_block_delta" && ev.delta?.type === "text_delta" && ev.delta.text) {
       answer += ev.delta.text;
       onDelta(ev.delta.text);
     }
   };
-  const feed = createSseLineParser(handleData);
+  const { feed, flush } = createSseLineParser(handleData);
 
   try {
     for (;;) {
@@ -155,6 +158,7 @@ async function streamGenerateOnce(
       feed(decoder.decode(value, { stream: true }));
     }
     feed(decoder.decode());
+    flush();
   } catch (err) {
     // Cancel the vendor stream so the upstream request isn't left half-open
     // billing tokens after we stop listening.
@@ -166,6 +170,13 @@ async function streamGenerateOnce(
 
   if (!answer.trim()) {
     throw new ProviderError(502, "empty-answer", "Anthropic returned an empty response.");
+  }
+  if (truncated) {
+    throw new ProviderError(
+      502,
+      "truncated-answer",
+      "Anthropic hit the output token limit and the answer was cut off, likely before its SOURCES footer. Try a shorter document, or ask about fewer sections at once.",
+    );
   }
   return { answer, model };
 }

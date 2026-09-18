@@ -82,13 +82,16 @@ export async function runAiToolStream(
   userPayload: string,
   send: (event: AiStreamEvent) => void,
 ): Promise<AiResult> {
-  const provider = resolveProviderOrThrow(requestedProvider);
-  const system = buildSystemPrompt(toolTitle(tool), TOOL_INSTRUCTIONS[tool]);
-  const started = Date.now();
-
-  send({ type: "start" });
-
+  // Resolve the provider INSIDE try: config errors (missing key, etc.) must
+  // reach the client as an `error` event. If this ran after writeHead(200) had
+  // already been sent by the route, throwing here would end the stream with
+  // zero events and the user would see a silent failure.
   try {
+    const provider = resolveProviderOrThrow(requestedProvider);
+    const system = buildSystemPrompt(toolTitle(tool), TOOL_INSTRUCTIONS[tool]);
+    const started = Date.now();
+
+    send({ type: "start" });
     let metaSent = false;
 
     const emitDelta = (text: string) => {

@@ -46,21 +46,39 @@ export interface Provider {
  * Incremental SSE parser shared by every streaming provider. Feed it raw
  * chunks; it emits complete `data:` payload strings across chunk boundaries
  * (multi-line `data:` frames are joined with \n, per the SSE spec).
+ *
+ * Returns { feed, flush } — flush() must be called once after the stream ends
+ * to emit a trailing frame not terminated by a newline. Vendors put their
+ * TERMINAL frame last (Gemini's finishReason, OpenAI's finish_reason,
+ * Anthropic's message_delta), so skipping the flush can silently drop the
+ * very signal that says the answer was truncated.
  */
-export function createSseLineParser(onData: (data: string) => void): (chunk: string) => void {
+export function createSseLineParser(onData: (data: string) => void): {
+  feed: (chunk: string) => void;
+  flush: () => void;
+} {
   let buffer = "";
-  return (chunk) => {
-    buffer += chunk;
-    let nl: number;
-    while ((nl = buffer.indexOf("\n")) !== -1) {
-      const line = buffer.slice(0, nl).replace(/\r$/, "");
-      buffer = buffer.slice(nl + 1);
-      if (line.startsWith("data:")) {
-        onData(line.slice(5).trimStart());
+  const emitLine = (line: string) => {
+    if (line.startsWith("data:")) onData(line.slice(5).trimStart());
+  };
+  return {
+    feed(chunk) {
+      buffer += chunk;
+      let nl: number;
+      while ((nl = buffer.indexOf("\n")) !== -1) {
+        const line = buffer.slice(0, nl).replace(/\r$/, "");
+        buffer = buffer.slice(nl + 1);
+        emitLine(line);
       }
       // event:/id:/retry:/comments: are irrelevant here — all vendors encode
       // the payload type inside the JSON data itself.
-    }
+    },
+    flush() {
+      if (buffer) {
+        emitLine(buffer.replace(/\r$/, ""));
+        buffer = "";
+      }
+    },
   };
 }
 

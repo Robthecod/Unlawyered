@@ -124,6 +124,7 @@ async function streamGenerateOnce(
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let answer = "";
+  let truncated = false;
 
   const handleData = (data: string) => {
     if (!data || data === "[DONE]") return;
@@ -133,13 +134,16 @@ async function streamGenerateOnce(
     } catch {
       return;
     }
-    const text = chunk.choices?.[0]?.delta?.content ?? "";
+    const choice = chunk.choices?.[0];
+    // finish_reason "length" = the output-token cap was hit mid-answer.
+    if (choice?.finish_reason === "length") truncated = true;
+    const text = choice?.delta?.content ?? "";
     if (text) {
       answer += text;
       onDelta(text);
     }
   };
-  const feed = createSseLineParser(handleData);
+  const { feed, flush } = createSseLineParser(handleData);
 
   try {
     for (;;) {
@@ -148,12 +152,20 @@ async function streamGenerateOnce(
       feed(decoder.decode(value, { stream: true }));
     }
     feed(decoder.decode());
+    flush();
   } finally {
     reader.releaseLock();
   }
 
   if (!answer.trim()) {
     throw new ProviderError(502, "empty-answer", "OpenAI returned an empty response.");
+  }
+  if (truncated) {
+    throw new ProviderError(
+      502,
+      "truncated-answer",
+      "OpenAI hit the output token limit and the answer was cut off, likely before its SOURCES footer. Try a shorter document, or ask about fewer sections at once.",
+    );
   }
   return { answer, model };
 }
