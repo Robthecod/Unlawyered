@@ -3,7 +3,7 @@
  */
 import { DEFAULT_MODELS } from "@unlawyered/shared";
 import { resolveApiKey } from "../settings.js";
-import { ProviderError, wrapVendorError, type Provider } from "./types";
+import { createSseLineParser, ProviderError, wrapVendorError, type Provider } from "./types";
 
 const ENDPOINT = "https://api.openai.com/v1/chat/completions";
 
@@ -19,6 +19,15 @@ export const openaiProvider: Provider = {
   },
   async generate(args) {
     const { answer } = await generateOnce(args, "generate");
+    return { answer, model: DEFAULT_MODELS.openai };
+  },
+
+  /**
+   * Streaming chat-completions (stream: true). Deltas map 1:1 to the vendor's
+   * SSE frames; resolves with the full answer once [DONE] arrives.
+   */
+  async streamGenerate(args, onDelta) {
+    const { answer } = await streamGenerateOnce(args, onDelta, "streamGenerate");
     return { answer, model: DEFAULT_MODELS.openai };
   },
 };
@@ -68,6 +77,85 @@ async function generateOnce(
     throw new ProviderError(502, "empty-answer", "OpenAI returned an empty response.");
   }
   return { answer };
+}
+
+interface OpenAiStreamChunk {
+  choices?: Array<{ delta?: { content?: string }; finish_reason?: string | null }>;
+}
+
+async function streamGenerateOnce(
+  args: { system: string; user: string; maxTokens?: number },
+  onDelta: (text: string) => void,
+  op: string,
+): Promise<{ answer: string; model: string }> {
+  const apiKey = resolveApiKey("openai")?.key;
+  if (!apiKey) {
+    throw new ProviderError(400, "missing-key", "No OpenAI API key configured. Add one in Settings.");
+  }
+
+  const model = DEFAULT_MODELS.openai;
+  const res = await fetch(ENDPOINT, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: args.system },
+        { role: "user", content: args.user },
+      ],
+      temperature: 0.2,
+      max_tokens: args.maxTokens ?? 4096,
+      stream: true,
+    }),
+    signal: AbortSignal.timeout(120_000),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw mapStatus(res.status, text);
+  }
+  if (!res.body) {
+    throw new ProviderError(502, "upstream", "OpenAI returned no response body to stream.");
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let answer = "";
+
+  const handleData = (data: string) => {
+    if (!data || data === "[DONE]") return;
+    let chunk: OpenAiStreamChunk;
+    try {
+      chunk = JSON.parse(data) as OpenAiStreamChunk;
+    } catch {
+      return;
+    }
+    const text = chunk.choices?.[0]?.delta?.content ?? "";
+    if (text) {
+      answer += text;
+      onDelta(text);
+    }
+  };
+  const feed = createSseLineParser(handleData);
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      feed(decoder.decode(value, { stream: true }));
+    }
+    feed(decoder.decode());
+  } finally {
+    reader.releaseLock();
+  }
+
+  if (!answer.trim()) {
+    throw new ProviderError(502, "empty-answer", "OpenAI returned an empty response.");
+  }
+  return { answer, model };
 }
 
 function mapStatus(status: number, detail: string): ProviderError {

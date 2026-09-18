@@ -5,6 +5,7 @@
  */
 import type {
   AiResult,
+  AiStreamEvent,
   DocumentInput,
   ProviderInfo,
   UploadedDocument,
@@ -185,41 +186,140 @@ export async function uploadDocument(file: File): Promise<UploadedDoc> {
 }
 
 /* ------------------------------------------------------------------ */
+/* AI tools (streaming)                                                */
+/* ------------------------------------------------------------------ */
+
+export interface StreamCallbacks {
+  /** Provider/model announced just before the first visible token. */
+  onMeta?: (meta: { provider: string; model: string; tool: string }) => void;
+  /** Successive answer text; concatenation approximates the final answer
+   *  (minus the held-back SOURCES footer). */
+  onDelta: (text: string) => void;
+}
+
+/**
+ * POST an AI tool request and consume its SSE stream.
+ *
+ * Cold-start retry: identical policy to handleWithRetry, but only while NO
+ * event has arrived yet — once the stream has produced anything, the request
+ * is committed and failures surface immediately (retrying would restart the
+ * answer from scratch and duplicate text the user already read).
+ */
+async function postJsonStream<T>(url: string, body: unknown, cb: StreamCallbacks): Promise<T> {
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    let gotEvent = false;
+    try {
+      const res = await fetch(url, {
+        ...jsonRequest(body),
+        headers: { "content-type": "application/json", accept: "text/event-stream" },
+      });
+      if (!res.ok) {
+        // Non-SSE error responses (400/401/429/500 with a JSON body) surface
+        // immediately — same contract as handle().
+        await handle<unknown>(res);
+      }
+      if (!res.body) throw new TypeError("Streaming not supported by this browser");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let finalResult: T | null = null;
+
+      const handleEvent = (event: AiStreamEvent) => {
+        gotEvent = true;
+        switch (event.type) {
+          case "meta":
+            cb.onMeta?.({ provider: event.provider, model: event.model, tool: event.tool });
+            break;
+          case "delta":
+            cb.onDelta(event.text);
+            break;
+          case "done":
+            finalResult = event.result as T;
+            break;
+          case "error":
+            throw new ApiError(502, event.code, event.message);
+          case "start":
+            break;
+        }
+      };
+
+      // SSE frames: `data: <json>\n\n` (comment pings start with ':').
+      const processData = (data: string) => {
+        const trimmed = data.trim();
+        if (!trimmed) return;
+        handleEvent(JSON.parse(trimmed) as AiStreamEvent);
+      };
+      const feed = (chunk: string) => {
+        buffer += chunk;
+        let idx: number;
+        while ((idx = buffer.indexOf("\n")) !== -1) {
+          const line = buffer.slice(0, idx).replace(/\r$/, "");
+          buffer = buffer.slice(idx + 1);
+          if (line.startsWith("data:")) processData(line.slice(5));
+          // ':' comment lines are keep-alive pings — ignore.
+        }
+      };
+
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          feed(decoder.decode(value, { stream: true }));
+        }
+        feed(decoder.decode());
+      } finally {
+        reader.releaseLock();
+      }
+
+      if (finalResult !== null) return finalResult;
+      throw new ApiError(502, "incomplete-stream", "The answer stream ended before it finished.");
+    } catch (err) {
+      lastErr = err;
+      // Retry only for cold-start failures AND only before any event reached us.
+      if (gotEvent || attempt === RETRY_DELAYS_MS.length || !isGatewayTimeout(err)) throw err;
+      await sleep(RETRY_DELAYS_MS[attempt] ?? 15_000);
+    }
+  }
+  throw lastErr;
+}
+
+/* ------------------------------------------------------------------ */
 /* AI tools                                                            */
 /* ------------------------------------------------------------------ */
 
-export async function askLegalQuestion(args: {
-  question: string;
-  jurisdiction?: string;
-}): Promise<AiResult> {
-  return postJson<AiResult>("/api/ask", args);
+export async function askLegalQuestion(
+  args: { question: string; jurisdiction?: string },
+  cb: StreamCallbacks,
+): Promise<AiResult> {
+  return postJsonStream<AiResult>("/api/ask", args, cb);
 }
 
-export async function explainLaw(args: {
-  lawName: string;
-  aspect?: string;
-}): Promise<AiResult> {
-  return postJson<AiResult>("/api/explain-law", args);
+export async function explainLaw(
+  args: { lawName: string; aspect?: string },
+  cb: StreamCallbacks,
+): Promise<AiResult> {
+  return postJsonStream<AiResult>("/api/explain-law", args, cb);
 }
 
-export async function reviewDocument(args: {
-  document: DocumentInput;
-  focus?: string;
-}): Promise<AiResult> {
-  return postJson<AiResult>("/api/review-document", args);
+export async function reviewDocument(
+  args: { document: DocumentInput; focus?: string },
+  cb: StreamCallbacks,
+): Promise<AiResult> {
+  return postJsonStream<AiResult>("/api/review-document", args, cb);
 }
 
-export async function crossCheckDocument(args: {
-  document: DocumentInput;
-  jurisdiction?: string;
-}): Promise<AiResult> {
-  return postJson<AiResult>("/api/cross-check", args);
+export async function crossCheckDocument(
+  args: { document: DocumentInput; jurisdiction?: string },
+  cb: StreamCallbacks,
+): Promise<AiResult> {
+  return postJsonStream<AiResult>("/api/cross-check", args, cb);
 }
 
-export async function stressTestContract(args: {
-  document: DocumentInput;
-  side?: "my" | "other";
-  concern?: string;
-}): Promise<AiResult> {
-  return postJson<AiResult>("/api/stress-test", args);
+export async function stressTestContract(
+  args: { document: DocumentInput; side?: "my" | "other"; concern?: string },
+  cb: StreamCallbacks,
+): Promise<AiResult> {
+  return postJsonStream<AiResult>("/api/stress-test", args, cb);
 }

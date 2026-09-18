@@ -1,15 +1,12 @@
 import { useEffect, useState } from "react";
-import { explainLaw, warmBackend, ApiError } from "../api";
+import { explainLaw, warmBackend } from "../api";
 import { ResultView } from "../components/ResultView";
-import { ProviderHint } from "./Ask";
-import type { AiResult } from "@unlawyered/shared";
+import { LivePreview, ProviderHint, useAiStream } from "./Ask";
 
 export function ExplainLaw() {
   const [lawName, setLawName] = useState("");
   const [aspect, setAspect] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<AiResult | null>(null);
+  const { busy, streaming, liveText, error, result, setResult, callbacks, started, finished } = useAiStream();
 
   // Start waking the backend while the user is still typing.
   useEffect(() => {
@@ -19,17 +16,17 @@ export function ExplainLaw() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!lawName.trim() || busy) return;
-    setBusy(true);
-    setError(null);
-    setResult(null);
+    started();
     try {
-      setResult(await explainLaw({ lawName: lawName.trim(), aspect: aspect.trim() || undefined }));
+      setResult(await explainLaw({ lawName: lawName.trim(), aspect: aspect.trim() || undefined }, callbacks));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Request failed. Is the backend running?");
-    } finally {
-      setBusy(false);
+      finished(err);
+      return;
     }
+    finished(null);
   }
+
+  const showPreview = busy && (streaming || liveText.length === 0);
 
   return (
     <div>
@@ -67,7 +64,7 @@ export function ExplainLaw() {
             <button type="submit" disabled={busy || lawName.trim().length < 2}>
               {busy ? (
                 <>
-                  <span className="spinner" /> Explaining…
+                  <span className="spinner" /> {streaming ? "Writing…" : "Explaining…"}
                 </>
               ) : (
                 "Explain"
@@ -79,6 +76,7 @@ export function ExplainLaw() {
 
       <ProviderHint />
       {error ? <div className="error-box">{error}</div> : null}
+      {showPreview ? <LivePreview text={liveText} streaming={streaming} /> : null}
       {result ? <ResultView result={result} /> : null}
     </div>
   );

@@ -3,7 +3,7 @@
  */
 import { Router } from "express";
 import { AskRequestSchema } from "@unlawyered/shared";
-import { runTool } from "./ai-shared.js";
+import { runTool, runToolStream, wantsStream } from "./ai-shared.js";
 import { asyncHandler, parseBody } from "../util.js";
 
 export const askRouter = Router();
@@ -17,6 +17,10 @@ askRouter.post(
       ``,
       question,
     ].join("\n");
+    if (wantsStream(req)) {
+      await runToolStream("ask", payload, res);
+      return;
+    }
     const result = await runTool("ask", payload);
     res.json(result);
   }),

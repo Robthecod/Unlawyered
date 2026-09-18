@@ -2,18 +2,15 @@
  * Review my document — plain-English document review.
  */
 import { useEffect, useState } from "react";
-import { ApiError, reviewDocument, warmBackend, type UploadedDoc } from "../api";
+import { reviewDocument, warmBackend, type UploadedDoc } from "../api";
 import { DocumentUpload } from "../components/DocumentUpload";
 import { ResultView } from "../components/ResultView";
-import { ProviderHint } from "./Ask";
-import type { AiResult } from "@unlawyered/shared";
+import { LivePreview, ProviderHint, useAiStream } from "./Ask";
 
 export function ReviewDocument() {
   const [doc, setDoc] = useState<UploadedDoc | null>(null);
   const [focus, setFocus] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<AiResult | null>(null);
+  const { busy, streaming, liveText, error, result, setResult, callbacks, started, finished } = useAiStream();
 
   // Start waking the backend while the user is still choosing a file.
   useEffect(() => {
@@ -23,22 +20,25 @@ export function ReviewDocument() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!doc || busy) return;
-    setBusy(true);
-    setError(null);
-    setResult(null);
+    started();
     try {
       setResult(
-        await reviewDocument({
-          document: { name: doc.name, text: doc.text },
-          focus: focus.trim() || undefined,
-        }),
+        await reviewDocument(
+          {
+            document: { name: doc.name, text: doc.text },
+            focus: focus.trim() || undefined,
+          },
+          callbacks,
+        ),
       );
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Request failed. Is the backend running?");
-    } finally {
-      setBusy(false);
+      finished(err);
+      return;
     }
+    finished(null);
   }
+
+  const showPreview = busy && (streaming || liveText.length === 0);
 
   return (
     <div>
@@ -66,7 +66,7 @@ export function ReviewDocument() {
           <button type="button" onClick={submit} disabled={!doc || busy}>
             {busy ? (
               <>
-                <span className="spinner" /> Reviewing…
+                <span className="spinner" /> {streaming ? "Writing…" : "Reviewing…"}
               </>
             ) : (
               "Review document"
@@ -77,6 +77,7 @@ export function ReviewDocument() {
 
       <ProviderHint />
       {error ? <div className="error-box">{error}</div> : null}
+      {showPreview ? <LivePreview text={liveText} streaming={streaming} /> : null}
       {result ? <ResultView result={result} /> : null}
     </div>
   );

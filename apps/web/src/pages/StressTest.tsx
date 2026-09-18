@@ -2,19 +2,16 @@
  * Stress-test my contract — adversarial clause-by-clause analysis.
  */
 import { useEffect, useState } from "react";
-import { ApiError, stressTestContract, warmBackend, type UploadedDoc } from "../api";
+import { stressTestContract, warmBackend, type UploadedDoc } from "../api";
 import { DocumentUpload } from "../components/DocumentUpload";
 import { ResultView } from "../components/ResultView";
-import { ProviderHint } from "./Ask";
-import type { AiResult } from "@unlawyered/shared";
+import { LivePreview, ProviderHint, useAiStream } from "./Ask";
 
 export function StressTest() {
   const [doc, setDoc] = useState<UploadedDoc | null>(null);
   const [side, setSide] = useState<"my" | "other">("my");
   const [concern, setConcern] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<AiResult | null>(null);
+  const { busy, streaming, liveText, error, result, setResult, callbacks, started, finished } = useAiStream();
 
   // Start waking the backend while the user is still choosing a file.
   useEffect(() => {
@@ -23,23 +20,26 @@ export function StressTest() {
 
   async function submit() {
     if (!doc || busy) return;
-    setBusy(true);
-    setError(null);
-    setResult(null);
+    started();
     try {
       setResult(
-        await stressTestContract({
-          document: { name: doc.name, text: doc.text },
-          side,
-          concern: concern.trim() || undefined,
-        }),
+        await stressTestContract(
+          {
+            document: { name: doc.name, text: doc.text },
+            side,
+            concern: concern.trim() || undefined,
+          },
+          callbacks,
+        ),
       );
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Request failed. Is the backend running?");
-    } finally {
-      setBusy(false);
+      finished(err);
+      return;
     }
+    finished(null);
   }
+
+  const showPreview = busy && (streaming || liveText.length === 0);
 
   return (
     <div>
@@ -73,7 +73,7 @@ export function StressTest() {
           <button type="button" onClick={submit} disabled={!doc || busy}>
             {busy ? (
               <>
-                <span className="spinner" /> Stress-testing…
+                <span className="spinner" /> {streaming ? "Writing…" : "Stress-testing…"}
               </>
             ) : (
               "Stress-test"
@@ -84,6 +84,7 @@ export function StressTest() {
 
       <ProviderHint />
       {error ? <div className="error-box">{error}</div> : null}
+      {showPreview ? <LivePreview text={liveText} streaming={streaming} /> : null}
       {result ? <ResultView result={result} /> : null}
     </div>
   );

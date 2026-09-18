@@ -3,7 +3,7 @@
  */
 import { Router } from "express";
 import { ReviewDocumentRequestSchema } from "@unlawyered/shared";
-import { runTool } from "./ai-shared.js";
+import { runTool, runToolStream, wantsStream } from "./ai-shared.js";
 import { asyncHandler, parseBody } from "../util.js";
 
 export const reviewDocumentRouter = Router();
@@ -22,6 +22,10 @@ reviewDocumentRouter.post(
     ]
       .filter(Boolean)
       .join("\n");
+    if (wantsStream(req)) {
+      await runToolStream("review-document", payload, res);
+      return;
+    }
     const result = await runTool("review-document", payload);
     res.json(result);
   }),

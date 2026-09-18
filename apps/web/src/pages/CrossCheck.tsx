@@ -2,17 +2,14 @@
  * Cross-check a document against Indian law, with citations.
  */
 import { useEffect, useState } from "react";
-import { ApiError, crossCheckDocument, warmBackend, type UploadedDoc } from "../api";
+import { crossCheckDocument, warmBackend, type UploadedDoc } from "../api";
 import { DocumentUpload } from "../components/DocumentUpload";
 import { ResultView } from "../components/ResultView";
-import { ProviderHint } from "./Ask";
-import type { AiResult } from "@unlawyered/shared";
+import { LivePreview, ProviderHint, useAiStream } from "./Ask";
 
 export function CrossCheck() {
   const [doc, setDoc] = useState<UploadedDoc | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<AiResult | null>(null);
+  const { busy, streaming, liveText, error, result, setResult, callbacks, started, finished } = useAiStream();
 
   // Start waking the backend while the user is still choosing a file.
   useEffect(() => {
@@ -21,22 +18,25 @@ export function CrossCheck() {
 
   async function submit() {
     if (!doc || busy) return;
-    setBusy(true);
-    setError(null);
-    setResult(null);
+    started();
     try {
       setResult(
-        await crossCheckDocument({
-          document: { name: doc.name, text: doc.text },
-          jurisdiction: "India",
-        }),
+        await crossCheckDocument(
+          {
+            document: { name: doc.name, text: doc.text },
+            jurisdiction: "India",
+          },
+          callbacks,
+        ),
       );
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Request failed. Is the backend running?");
-    } finally {
-      setBusy(false);
+      finished(err);
+      return;
     }
+    finished(null);
   }
+
+  const showPreview = busy && (streaming || liveText.length === 0);
 
   return (
     <div>
@@ -54,7 +54,7 @@ export function CrossCheck() {
           <button type="button" onClick={submit} disabled={!doc || busy}>
             {busy ? (
               <>
-                <span className="spinner" /> Cross-checking…
+                <span className="spinner" /> {streaming ? "Writing…" : "Cross-checking…"}
               </>
             ) : (
               "Cross-check"
@@ -65,6 +65,7 @@ export function CrossCheck() {
 
       <ProviderHint />
       {error ? <div className="error-box">{error}</div> : null}
+      {showPreview ? <LivePreview text={liveText} streaming={streaming} /> : null}
       {result ? <ResultView result={result} /> : null}
     </div>
   );

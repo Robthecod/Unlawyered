@@ -3,7 +3,7 @@
  */
 import { Router } from "express";
 import { StressTestRequestSchema } from "@unlawyered/shared";
-import { runTool } from "./ai-shared.js";
+import { runTool, runToolStream, wantsStream } from "./ai-shared.js";
 import { asyncHandler, parseBody } from "../util.js";
 
 export const stressTestRouter = Router();
@@ -23,6 +23,10 @@ stressTestRouter.post(
     ]
       .filter(Boolean)
       .join("\n");
+    if (wantsStream(req)) {
+      await runToolStream("stress-test", payload, res);
+      return;
+    }
     const result = await runTool("stress-test", payload);
     res.json(result);
   }),

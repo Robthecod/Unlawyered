@@ -896,6 +896,28 @@ textarea {
   padding: 0.1rem 0.65rem;
 }
 
+/* Streaming live preview: blinking caret at the write position. */
+.stream-cursor {
+  display: inline-block;
+  width: 0.55em;
+  height: 1.05em;
+  margin-left: 0.15em;
+  vertical-align: text-bottom;
+  background: var(--ink);
+  animation: cursor-blink 1s steps(1) infinite;
+}
+
+@keyframes cursor-blink {
+  0%,
+  60% {
+    opacity: 1;
+  }
+  61%,
+  100% {
+    opacity: 0;
+  }
+}
+
 .sources li:nth-child(3n + 1) .src-role {
   background: var(--mustard);
 }

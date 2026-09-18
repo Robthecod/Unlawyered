@@ -7,6 +7,7 @@
 import {
   DEFAULT_MODELS,
   type AiResult,
+  type AiStreamEvent,
   type ProviderId,
   type ToolId,
 } from "@unlawyered/shared";
@@ -63,6 +64,93 @@ export async function runAiTool(
     liveProvider: provider.id !== "mock",
     latencyMs: Date.now() - started,
   };
+}
+
+/**
+ * Streaming twin of runAiTool: emits AiStreamEvents to `send` while the
+ * model writes, then finishes with the fully parsed AiResult.
+ *
+ * The SOURCES footer is held back: raw model output ends with "SOURCES:\n1 |
+ * ..." lines that only make sense once parsed, so the live preview must not
+ * show them. parseAnswer() already splits the footer off — we simply write
+ * each delta only up to the footer boundary and let `done` carry the parsed
+ * sources for the real panel.
+ */
+export async function runAiToolStream(
+  tool: ToolId,
+  requestedProvider: ProviderId,
+  userPayload: string,
+  send: (event: AiStreamEvent) => void,
+): Promise<AiResult> {
+  const provider = resolveProviderOrThrow(requestedProvider);
+  const system = buildSystemPrompt(toolTitle(tool), TOOL_INSTRUCTIONS[tool]);
+  const started = Date.now();
+
+  send({ type: "start" });
+
+  try {
+    let metaSent = false;
+
+    const emitDelta = (text: string) => {
+      if (!metaSent) {
+        // First token arrived: endpoint resolution is done and text is on its
+        // way — announce the stream before the first visible text. The exact
+        // model id only becomes known when the stream completes; `done`
+        // carries the authoritative value.
+        metaSent = true;
+        send({ type: "meta", provider: provider.id, model: DEFAULT_MODELS[provider.id], tool });
+      }
+      // Hold back anything at/after the SOURCES footer so partial citation
+      // lines never flash in the preview.
+      send({ type: "delta", text: stripFromSourcesFooter(text) });
+    };
+
+    const args = { system, user: userPayload, tool };
+    const gen =
+      provider.streamGenerate
+        ? await provider.streamGenerate(args, emitDelta)
+        : await (async () => {
+            // Fallback: no streaming support -> one delta with everything.
+            const r = await provider.generate(args);
+            emitDelta(r.answer);
+            return r;
+          })();
+
+    const parsed = parseAnswer(gen.answer);
+    const result: AiResult = {
+      tool,
+      provider: provider.id,
+      model: gen.model || DEFAULT_MODELS[provider.id],
+      answer: parsed.answer,
+      sources: parsed.sources,
+      citations: parsed.citations,
+      liveProvider: provider.id !== "mock",
+      latencyMs: Date.now() - started,
+    };
+    send({ type: "done", result });
+    return result;
+  } catch (err) {
+    const status = err instanceof ProviderError ? err.status : 502;
+    const code = err instanceof ProviderError ? err.code : "provider-failed";
+    const message = err instanceof Error ? err.message : "Generation failed.";
+    send({ type: "error", code, message: message || `Generation failed (HTTP ${status}).` });
+    throw err;
+  }
+}
+
+/**
+ * Truncate text at the SOURCES footer boundary, tolerating a footer that is
+ * still mid-flight across deltas (e.g. "SOUR", "SOURCES:", "SOURCES:\n1 |").
+ * Returns the text up to the footer start, or the text unchanged when no
+ * footer has begun yet.
+ */
+function stripFromSourcesFooter(text: string): string {
+  const idx = text.search(/\n\s*(?:\*\*)?sources(?:\*\*)?\s*:/i);
+  if (idx !== -1) return text.slice(0, idx);
+  // A partial "sources" token at the very end might still grow into the
+  // footer — hold it back; the final parse will re-attach anything that was
+  // actually body text.
+  return text.replace(/\n\s*(?:\*\*)?s(?:o(?:u(?:r(?:c(?:e?s?)?)?)?)?)?\s*$/i, "");
 }
 
 function toolTitle(tool: ToolId): string {

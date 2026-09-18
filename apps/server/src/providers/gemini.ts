@@ -9,7 +9,7 @@
  * The result is cached per key for 10 minutes.
  */
 import { resolveApiKey } from "../settings.js";
-import { ProviderError, wrapVendorError, type Provider } from "./types";
+import { createSseLineParser, ProviderError, wrapVendorError, type Provider } from "./types";
 
 const API_BASES = [
   "https://generativelanguage.googleapis.com/v1beta",
@@ -92,6 +92,45 @@ export const geminiProvider: Provider = {
         if (!transient) throw err;
         // Block this model for a couple of minutes and force a re-probe so the
         // next attempt fails over to a different, healthy model.
+        const key = resolveApiKey("gemini")?.key;
+        if (key) {
+          const cached = modelCache.get(key);
+          if (cached) {
+            modelBlocklist.set(`${cached.base}|${cached.model}`, Date.now() + 2 * 60 * 1000);
+            modelCache.delete(key);
+          }
+        }
+        if (attempt === 3) break;
+        await new Promise((r) => setTimeout(r, 1000 * attempt));
+      }
+    }
+    throw lastErr;
+  },
+
+  /**
+   * Streaming generation over :streamGenerateContent?alt=sse. Same endpoint
+   * resolution, model failover and error mapping as generate(); the retry
+   * loop only restarts when NO delta has been emitted yet — once text has
+   * reached the client, a retry would duplicate it.
+   */
+  async streamGenerate(args, onDelta) {
+    let lastErr: unknown = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      let emitted = false;
+      const onDeltaOnceEmitted = (text: string) => {
+        emitted = true;
+        onDelta(text);
+      };
+      try {
+        const { answer, model } = await streamGenerateOnce(args, onDeltaOnceEmitted, "streamGenerate");
+        return { answer, model };
+      } catch (err) {
+        lastErr = err;
+        if (emitted) throw err; // client already saw text — no safe retry
+        const code = err instanceof ProviderError ? err.code : "";
+        const transient =
+          code === "upstream" || code === "model-unavailable" || code === "no-usable-model" || code === "rate-limited";
+        if (!transient) throw err;
         const key = resolveApiKey("gemini")?.key;
         if (key) {
           const cached = modelCache.get(key);
@@ -318,6 +357,99 @@ function mapStatus(status: number, detail: string): ProviderError {
     return new ProviderError(502, "upstream", "Gemini had a server error. Try again.", detail);
   }
   return new ProviderError(502, "upstream", `Gemini request failed (HTTP ${status}).`, detail);
+}
+
+interface GeminiStreamChunk {
+  candidates?: Array<{
+    finishReason?: string;
+    content?: { parts?: Array<{ text?: string }> } | null;
+  }>;
+}
+
+/**
+ * One streaming attempt against :streamGenerateContent?alt=sse. Emits text
+ * deltas as they arrive; resolves with the full concatenated answer. Applies
+ * the same MAX_TOKENS / empty-answer guards as generateOnce so a truncated
+ * stream fails loudly instead of resolving with an uncited half-answer.
+ */
+async function streamGenerateOnce(
+  args: { system: string; user: string; maxTokens?: number },
+  onDelta: (text: string) => void,
+  op: string,
+): Promise<{ answer: string; model: string }> {
+  const apiKey = requireKey();
+  const { model, base } = await resolveEndpoint();
+  const url = `${base}/models/${model}:streamGenerateContent?alt=sse`;
+  const body = {
+    system_instruction: { parts: [{ text: args.system }] },
+    contents: [{ role: "user", parts: [{ text: args.user }] }],
+    generationConfig: {
+      temperature: 0.2,
+      maxOutputTokens: args.maxTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+      ...thinkingConfigFor(model),
+    },
+  };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(120_000),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw mapStatus(res.status, text);
+  }
+  if (!res.body) {
+    throw new ProviderError(502, "upstream", "Gemini returned no response body to stream.");
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let answer = "";
+  let truncated = false;
+
+  const handleData = (data: string) => {
+    if (!data || data === "[DONE]") return;
+    let chunk: GeminiStreamChunk;
+    try {
+      chunk = JSON.parse(data) as GeminiStreamChunk;
+    } catch {
+      return; // keep-alive or partial frame — ignore
+    }
+    const candidate = chunk.candidates?.[0];
+    if (candidate?.finishReason === "MAX_TOKENS") truncated = true;
+    const text = candidate?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
+    if (text) {
+      answer += text;
+      onDelta(text);
+    }
+  };
+  const feed = createSseLineParser(handleData);
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      feed(decoder.decode(value, { stream: true }));
+    }
+    feed(decoder.decode()); // flush any final partial line
+  } finally {
+    reader.releaseLock();
+  }
+
+  if (truncated) {
+    throw new ProviderError(
+      502,
+      "truncated-answer",
+      "Gemini hit the output token limit and the answer was cut off, likely before its SOURCES footer. Try a shorter document, or ask about fewer sections at once.",
+    );
+  }
+  if (!answer.trim()) {
+    throw new ProviderError(502, "empty-answer", "Gemini returned an empty response.");
+  }
+  return { answer, model };
 }
 
 /** Upstream 5xx / model-404 flaps are transient and worth retrying. */

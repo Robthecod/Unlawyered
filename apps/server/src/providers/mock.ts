@@ -51,4 +51,20 @@ export const mockProvider: Provider = {
     }
     return { answer: mockAnswer(tool, user), model: "mock-1" };
   },
+
+  /** Streams the same mock answer word by word so the live preview and the
+   *  footer-holdback logic are exercised without any vendor key. */
+  async streamGenerate({ tool, user }: GenerateArgs, onDelta) {
+    if (user.trim().length === 0) {
+      throw new ProviderError(400, "empty-input", "No input was provided.");
+    }
+    const full = mockAnswer(tool, user);
+    const words = full.split(/(\s+)/); // keep whitespace tokens so joins are lossless
+    for (let i = 0; i < words.length; i += 3) {
+      const piece = words.slice(i, i + 3).join("");
+      onDelta(piece);
+      await new Promise((r) => setTimeout(r, 12));
+    }
+    return { answer: full, model: "mock-1" };
+  },
 };

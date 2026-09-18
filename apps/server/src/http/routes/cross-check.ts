@@ -3,7 +3,7 @@
  */
 import { Router } from "express";
 import { CrossCheckRequestSchema } from "@unlawyered/shared";
-import { runTool } from "./ai-shared.js";
+import { runTool, runToolStream, wantsStream } from "./ai-shared.js";
 import { asyncHandler, parseBody } from "../util.js";
 
 export const crossCheckRouter = Router();
@@ -20,6 +20,10 @@ crossCheckRouter.post(
       document.text,
       `DOCUMENT TEXT END`,
     ].join("\n");
+    if (wantsStream(req)) {
+      await runToolStream("cross-check", payload, res);
+      return;
+    }
     const result = await runTool("cross-check", payload);
     res.json(result);
   }),

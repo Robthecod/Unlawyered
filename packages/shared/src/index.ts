@@ -108,10 +108,26 @@ export interface AiResult {
   /** True if a real provider answered; false for the Mock provider */
   liveProvider: boolean;
   latencyMs: number;
-}
+}/* ------------------------------------------------------------------ */
+/* Streaming (SSE) protocol                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * One server-sent event in a streamed AI answer. Sequence:
+ *   start -> meta -> delta* -> done      (or error at any point)
+ * `delta` carries only visible answer text — the SOURCES footer is held back
+ * server-side and arrives inside the parsed `done` result instead, so the
+ * live preview never shows partial citation lines.
+ */
+export type AiStreamEvent =
+  | { type: "start" }
+  | { type: "meta"; provider: ProviderId; model: string; tool: ToolId }
+  | { type: "delta"; text: string }
+  | { type: "done"; result: AiResult }
+  | { type: "error"; code: string; message: string };
 
 /* ------------------------------------------------------------------ */
-/* The five tools                                                     */
+/* The five tools                                                      */
 /* ------------------------------------------------------------------ */
 
 export const TOOL_IDS = [

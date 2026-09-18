@@ -3,7 +3,7 @@
  */
 import { DEFAULT_MODELS } from "@unlawyered/shared";
 import { resolveApiKey } from "../settings.js";
-import { ProviderError, wrapVendorError, type Provider } from "./types";
+import { createSseLineParser, ProviderError, wrapVendorError, type Provider } from "./types";
 
 const ENDPOINT = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
@@ -20,6 +20,16 @@ export const anthropicProvider: Provider = {
   },
   async generate(args) {
     const { answer } = await generateOnce(args, "generate");
+    return { answer, model: DEFAULT_MODELS.anthropic };
+  },
+
+  /**
+   * Streaming messages (stream: true). Vendor emits typed SSE events; only
+   * content_block_delta carries visible text. Unconsumed input is cancelled
+   * on error to avoid keeping a paid stream half-open.
+   */
+  async streamGenerate(args, onDelta) {
+    const { answer } = await streamGenerateOnce(args, onDelta, "streamGenerate");
     return { answer, model: DEFAULT_MODELS.anthropic };
   },
 };
@@ -71,6 +81,93 @@ async function generateOnce(
     throw new ProviderError(502, "empty-answer", "Anthropic returned an empty response.");
   }
   return { answer };
+}
+
+interface AnthropicStreamEvent {
+  type?: string;
+  delta?: { type?: string; text?: string };
+  error?: { message?: string };
+}
+
+async function streamGenerateOnce(
+  args: { system: string; user: string; maxTokens?: number },
+  onDelta: (text: string) => void,
+  op: string,
+): Promise<{ answer: string; model: string }> {
+  const apiKey = resolveApiKey("anthropic")?.key;
+  if (!apiKey) {
+    throw new ProviderError(400, "missing-key", "No Anthropic API key configured. Add one in Settings.");
+  }
+
+  const model = DEFAULT_MODELS.anthropic;
+  const res = await fetch(ENDPOINT, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": ANTHROPIC_VERSION,
+    },
+    body: JSON.stringify({
+      model,
+      system: args.system,
+      max_tokens: args.maxTokens ?? 4096,
+      messages: [{ role: "user", content: args.user }],
+      temperature: 0.2,
+      stream: true,
+    }),
+    signal: AbortSignal.timeout(120_000),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw mapStatus(res.status, text);
+  }
+  if (!res.body) {
+    throw new ProviderError(502, "upstream", "Anthropic returned no response body to stream.");
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let answer = "";
+
+  const handleData = (data: string) => {
+    if (!data) return;
+    let ev: AnthropicStreamEvent;
+    try {
+      ev = JSON.parse(data) as AnthropicStreamEvent;
+    } catch {
+      return;
+    }
+    if (ev.type === "error") {
+      throw new ProviderError(502, "upstream", `Anthropic stream failed: ${ev.error?.message ?? "unknown error"}`);
+    }
+    if (ev.type === "content_block_delta" && ev.delta?.type === "text_delta" && ev.delta.text) {
+      answer += ev.delta.text;
+      onDelta(ev.delta.text);
+    }
+  };
+  const feed = createSseLineParser(handleData);
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      feed(decoder.decode(value, { stream: true }));
+    }
+    feed(decoder.decode());
+  } catch (err) {
+    // Cancel the vendor stream so the upstream request isn't left half-open
+    // billing tokens after we stop listening.
+    await res.body.cancel().catch(() => {});
+    throw err;
+  } finally {
+    reader.releaseLock();
+  }
+
+  if (!answer.trim()) {
+    throw new ProviderError(502, "empty-answer", "Anthropic returned an empty response.");
+  }
+  return { answer, model };
 }
 
 function mapStatus(status: number, detail: string): ProviderError {

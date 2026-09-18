@@ -3,7 +3,7 @@
  */
 import { Router } from "express";
 import { ExplainLawRequestSchema } from "@unlawyered/shared";
-import { runTool } from "./ai-shared.js";
+import { runTool, runToolStream, wantsStream } from "./ai-shared.js";
 import { asyncHandler, parseBody } from "../util.js";
 
 export const explainLawRouter = Router();
@@ -18,6 +18,10 @@ explainLawRouter.post(
     ]
       .filter(Boolean)
       .join("\n");
+    if (wantsStream(req)) {
+      await runToolStream("explain-law", payload, res);
+      return;
+    }
     const result = await runTool("explain-law", payload);
     res.json(result);
   }),
