@@ -1100,6 +1100,26 @@ textarea {
   padding: 0.32rem 0.85rem;
   border-radius: 999px;
   transform: rotate(-2deg);
+  /* Perpetual life: slow bob + tilt sway around the base -2deg (the keyframes
+     swing -3deg <-> -1deg so the resting tilt reads as the average). Tiny
+     amplitudes on purpose — alive, not busy. Static transform above is the
+     reduced-motion fallback. */
+  animation: kicker-bob 2.8s ease-in-out infinite alternate;
+}
+
+@keyframes kicker-bob {
+  from {
+    transform: rotate(-3deg) translateY(-0.06em);
+  }
+  to {
+    transform: rotate(-1deg) translateY(0.08em);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-kicker {
+    animation: none;
+  }
 }
 
 .home-hero h1 {
