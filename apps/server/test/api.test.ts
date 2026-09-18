@@ -92,6 +92,15 @@ describe("POST /api/documents", () => {
       .attach("file", Buffer.from("MZ..."), "evil.exe")
       .expect(400);
   });
+
+  it("rejects oversized uploads with a clear 413 (not a generic 500)", async () => {
+    const big = Buffer.alloc(31 * 1024 * 1024, 65); // 31 MB of 'A'
+    const res = await request(app)
+      .post("/api/documents")
+      .attach("file", big, { filename: "big.txt", contentType: "text/plain" })
+      .expect(413);
+    expect(res.body.error?.code).toBe("file-too-large");
+  });
 });
 
 describe("document tools", () => {

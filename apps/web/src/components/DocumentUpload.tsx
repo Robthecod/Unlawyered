@@ -4,7 +4,11 @@
  * reports the extracted text + metadata upward via onUploaded.
  */
 import { useRef, useState } from "react";
+import { MAX_UPLOAD_BYTES } from "@unlawyered/shared";
 import { uploadDocument, ApiError, type UploadedDoc } from "../api";
+
+/** MB figure for messages, derived from the shared cap so they can't drift. */
+const MAX_UPLOAD_MB = Math.round(MAX_UPLOAD_BYTES / 1024 / 1024);
 
 export function DocumentUpload({
   onUploaded,
@@ -20,6 +24,17 @@ export function DocumentUpload({
   const inputRef = useRef<HTMLInputElement>(null);
 
   async function handleFile(file: File) {
+    // Instant client-side rejection: files over the shared cap fail here with
+    // no upload, no spinner, and no server round-trip. The server still
+    // enforces the same limit (413) as the authority — this is just the fast path.
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setDoc(null);
+      onUploaded(null);
+      setError(
+        `"${file.name}" is too large (${(file.size / 1024 / 1024).toFixed(1)} MB) — the limit is ${MAX_UPLOAD_MB} MB. Split the file or export fewer pages, then try again.`,
+      );
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -94,7 +109,7 @@ export function DocumentUpload({
               <strong>Drop a file here</strong> or click to choose
             </span>
             <span className="upload-types">
-              <code>.txt</code> <code>.md</code> <code>.pdf</code> <code>.docx</code> — up to 30
+              <code>.txt</code> <code>.md</code> <code>.pdf</code> <code>.docx</code> — up to {MAX_UPLOAD_MB}
               MB
             </span>
           </span>

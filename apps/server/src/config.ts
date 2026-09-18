@@ -4,6 +4,7 @@
  * Settings and stored encrypted. These env vars only pre-seed defaults for
  * self-hosters who want the app to work before anyone opens Settings.
  */
+import { MAX_UPLOAD_BYTES as MAX_UPLOAD_BYTES_SHARED } from "@unlawyered/shared";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -29,8 +30,8 @@ export const config = {
   } as Partial<Record<"gemini" | "openai" | "anthropic", string>>,
 };
 
-/** 30 MB raw upload cap; text extracted must still pass the 400k-char check. */
-export const MAX_UPLOAD_BYTES = 30 * 1024 * 1024;
+/** 30 MB raw upload cap (shared constant); text extracted must still pass the 400k-char check. */
+export const MAX_UPLOAD_BYTES = MAX_UPLOAD_BYTES_SHARED;
 
 export const ALLOWED_UPLOAD_EXTENSIONS = [".txt", ".md", ".pdf", ".docx"];
 

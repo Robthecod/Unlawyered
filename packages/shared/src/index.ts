@@ -174,6 +174,11 @@ export type StressTestRequest = z.infer<typeof StressTestRequestSchema>;
 /* Documents (upload)                                                 */
 /* ------------------------------------------------------------------ */
 
+/** Shared 30 MB upload cap — enforced client-side (instant rejection) and
+ *  server-side (multer limit + extension/size assertion). One constant, two
+ *  enforcement points; changing it here changes both. */
+export const MAX_UPLOAD_BYTES = 30 * 1024 * 1024;
+
 export interface UploadedDocument {
   id: string;
   name: string;

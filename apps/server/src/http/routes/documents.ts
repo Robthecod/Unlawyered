@@ -20,7 +20,27 @@ const upload = multer({
 
 documentsRouter.post(
   "/",
-  upload.single("file"),
+  (req, res, next) => {
+    upload.single("file")(req, res, (err: unknown) => {
+      if (!err) {
+        next();
+        return;
+      }
+      // Multer rejects oversized uploads with MulterError(LIMIT_FILE_SIZE);
+      // surfacing it raw would fall through to the generic 500 handler.
+      if (err instanceof Error && "code" in err && (err as { code?: string }).code === "LIMIT_FILE_SIZE") {
+        next(
+          new HttpError(
+            413,
+            "file-too-large",
+            `File too large (max ${Math.round(MAX_UPLOAD_BYTES / 1024 / 1024)} MB). Split it or export fewer pages.`,
+          ),
+        );
+        return;
+      }
+      next(err);
+    });
+  },
   asyncHandler(async (req, res) => {
     const file = req.file;
     if (!file) throw new HttpError(400, "no-file", "No file received. Attach a .txt, .md, .pdf or .docx file.");
@@ -32,7 +52,10 @@ documentsRouter.post(
       text = await extractText(file.originalname, file.buffer);
     } catch (err) {
       if (err instanceof HttpError) throw err;
-      throw new HttpError(422, "extract-failed", `Could not read "${file.originalname}". Is the file valid and not password-protected?`);
+      // extractText maps PDF/docx failures to precise messages already; this is
+      // the rare escape hatch (e.g. mammoth throwing on a malformed docx), so
+      // keep it neutral — do NOT mention "password-protected" (the #1 false lead).
+      throw new HttpError(422, "extract-failed", `Could not read "${file.originalname}". The file may be malformed — try re-exporting it (e.g. print → Save as PDF) and upload again.`);
     }
 
     const textTrimmed = text.trim();
